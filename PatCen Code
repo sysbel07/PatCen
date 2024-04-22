@@ -1,0 +1,276 @@
+pragma solidity ^0.6.6;
+//pragma experimental ABIEncoderV2;
+
+//contract interfacePatientRole{
+  //  function VerifyUser(address Patient, address community, address user) external; 
+//}
+    
+
+contract PatientRole{
+    uint256 count=0; //count for all the tokens
+    uint256 public volume;   // total volume of Clients
+    address [] Gateways; // admins of the system
+    struct Token{ // struct for the information of a given token
+        bytes32 RID;
+        address community;
+        address Patient;
+        address user;
+        address dev;
+    }
+    struct Patients{ // struct for the addresses of Patients
+        address dev;
+        address community;
+    }
+    struct Education{
+    string RType;
+    bytes32 RID;
+    address Patient;
+}
+
+ struct HealthCare{
+    string RType;
+    bytes32 RID;
+    address Patient;
+}
+
+struct Traveling{
+    string RType;
+    bytes32 RID;
+    address Patient;
+}
+    mapping(address =>Traveling) public travel;
+    mapping(address =>HealthCare) public health;
+    mapping(address =>Education) public edu;  
+    //uint256 start = now;
+    Token [] public Tokens ; // array of all tokens issued
+    // mapping for address user; and their accessable homes
+    mapping (address => Patients[]) public Patientservice;
+    // mapping for homes at a community
+    mapping (address => address[]) public home_Patient; 
+    
+    mapping(address => uint) senders;
+     //uint256 end;
+     //uint256 delay;
+    modifier onlyGateway{ // for address user; check at modifications
+        bool Gateway=false;
+        for(uint256 i = 0; i < Gateways.length;i++){
+            if(msg.sender==Gateways[i]){
+                Gateway=true;
+                break;
+            }
+        }
+            require(!Gateway);
+            _;
+    }
+
+ uint256 meanTime;
+    uint256 start = now;
+    
+    function Patient_Role() public onlyGateway{
+        Gateways.push(msg.sender); //creater of contract is the first admin
+    }
+   
+    
+   
+  
+    // adds a home to a given address user; by admin
+    uint256 Timestamp=block.timestamp;
+    function Classification(bytes32 RID, string memory RType, address Patient) 
+                                                             internal onlyGateway returns (string memory) {         //only admin can add address user; and homes
+        if(keccak256(abi.encodePacked(RType))==keccak256(abi.encodePacked('Education'))){
+        edu[Patient].RID=RID;
+        edu[Patient].RType=RType;
+        emit Edu_Request(edu[Patient].RID, edu[Patient].RType, Patient);
+        }
+        else{
+            
+            if(keccak256(abi.encodePacked(RType))==keccak256(abi.encodePacked('Traveling'))){
+               travel[Patient].RID=RID;
+               travel[Patient].RType=RType; 
+               emit Travel_Request(travel[Patient].RID, travel[Patient].RType, Patient);
+            }
+            else{
+                 if(keccak256(abi.encodePacked(RType))==keccak256(abi.encodePacked('HealthCare'))){
+                   health[Patient].RID=RID;
+                   health[Patient].RType=RType; 
+                   emit Health_Request( health[Patient].RID, health[Patient].RType, Patient);
+                   }
+                   else{
+                       return 'The entry is incorrect, thus: Stop Classification';
+                   }
+                }
+            }
+        }
+    
+    event Edu_Request(bytes32 RID, string Request_Type, address Patient);
+    event Travel_Request(bytes32 RID, string Request_Type, address Patient);
+    event Health_Request(bytes32 RID, string Request_Type, address Patient);
+                                                             
+    // adds a home to a given community
+    function addPatient (address community, address Patient,uint256 AcessTime) public onlyGateway{ 
+        //only admin can add address user; and homes
+        home_Patient[community].push(Patient);
+        //Patients[community].push(user);
+        emit PatientAdded(community,Patient, AcessTime, now-start,msg.sender);
+    }   
+   
+    function addUser (address community, address user, address Patient, uint256 AcessTime, string memory RType) public onlyGateway{ 
+        require(now >Timestamp);
+        //only admin can add address user; and homes
+        home_Patient[community].push(user);
+        Patientservice[user].push(Patients(Patient,community));
+           emit User_Patient_Mapping_Added(user,Patient,msg.sender,community );
+        bytes32 RID= keccak256(abi.encodePacked(community,msg.sender,user,Patient));
+                Tokens.push(Token(RID,msg.sender,community,user,Patient));
+              // emit RIDCreated(RID1,msg.sender);RID
+            checksum1= keccak256(abi.encodePacked(RID,RType,AcessTime));  
+        emit UserAdded(RID,RType,Patient,community,user,AcessTime,now-start, msg.sender);
+        
+        
+        
+       
+        
+    }   
+    
+     // to share the addition of new admin by who 
+    //event GatewayAdded(address newGateway, address addingGateway); 
+    // to share new mapping for home_services mapping added by who 
+    event User_Patient_Mapping_Added(address user, address Patient,  address addingGateway, address community);
+    // to share new HomeCommunity mapping added by who
+    event PatientAdded(address community, address Patient,uint256 AcessTime,uint256 meanTime, address addingGateway);
+    // to share new HomeCommunity mapping added by who
+    event UserAdded(bytes32 RID, string RType, address Patient, address community, address user, uint256 AcessTime, uint256 meanTime, address addingGateway);
+    // to share the requested home doesn't exist on the system
+    event PatientDoesnotExist(address Patient, address community,address sender);
+    //event RIDCreated(bytes32 RID,address Registering_Gateway);
+    
+    
+    // delete user; 
+    function deleteUser(address user, uint256 AcessTime) public onlyGateway{ 
+        delete Patientservice[user];
+        emit UserAllMappingDeleted(user, AcessTime,now-start, msg.sender);
+    }
+
+    // delete patient at a community 
+    function deletePatient (address Patient , uint256 AcessTime) public onlyGateway{ 
+        delete home_Patient[Patient];
+       emit PatientDeleted(Patient, AcessTime,now-start,msg.sender);
+
+    }
+    
+     
+    // to share the deletion of all home services mapping of a address user; added by who 
+    event UserAllMappingDeleted(address user, uint256 AcessTime,uint256 meanTime, address deletingGateway);
+     // to share the deletion all community homes mapping of a community  by who
+    event PatientDeleted(address community, uint256 AcessTime,uint256 meanTime, address deletingGateway);
+    bytes32 checksum1;
+    bytes32 checksum2;
+    
+    
+    //address community;
+    //address user;
+    bytes32 Encrypted_TK;
+    //bytes32 A;
+    bytes32 MK;
+    bytes32 PK;
+    uint256 TimeKey1=now;
+    // authetnication request by Patient
+    function KeyGenerate(address community, address user) public onlyGateway{ 
+         bytes32 A= keccak256(abi.encodePacked(block.difficulty, community));
+            MK= keccak256(abi.encodePacked(community,block.difficulty));
+            PK= keccak256(abi.encodePacked(user,community,A));
+            uint256 TimeKey2=now-TimeKey1;
+            emit Generate_Keys(MK,PK, TimeKey2);
+    }
+    event Generate_Keys(bytes32 MK, bytes32 PK, uint256 Key_Generation_Time);
+    
+    uint256 TimeEnc1=now;
+    function Verify_And_Give_Access(address Patient, address community, address user, bytes32 RID, string memory RType, uint256 AcessTime) public returns (string memory){ 
+        
+        //bytes32 A= keccak256(abi.encodePacked(block.difficulty, community));
+        //bytes32 MK= keccak256(abi.encodePacked(community,block.difficulty));
+        //bytes32 PK= keccak256(abi.encodePacked(user,community,A));
+        // Check if user exists in Community mapping
+        bool UserExists=false;
+        for(uint256 i = 0; i<home_Patient[community].length; i++){
+            if(home_Patient[community][i]==user){ // check the user of a data
+             //   return the user is valid
+                UserExists=true;
+                // shares successful authentication event
+                emit Authenticated(msg.sender,user,AcessTime,now-start, community);
+                uint256 PremiumTime = now - start;
+                    if (AcessTime<PremiumTime){
+                        checksum2= keccak256(abi.encodePacked(RID,RType,AcessTime)); 
+                        
+                        while(checksum1==checksum2){
+                            Classification(RID,RType,Patient); 
+                         if(keccak256(abi.encodePacked(RType))==keccak256(abi.encodePacked('Education'))){
+                           Encrypted_TK= keccak256(abi.encodePacked(user,PK,MK));
+                           uint256 TimeEnc2=now-TimeEnc1;
+                           emit Encrypted_Detail(Encrypted_TK, TimeEnc2);
+                            return 'Educational data access granted!';
+                            //return Encrypted_TK;
+                              
+                              
+                             
+                         }
+                            else{
+                                    if(keccak256(abi.encodePacked(RType))==keccak256(abi.encodePacked('Traveling'))){
+                                     Encrypted_TK= keccak256(abi.encodePacked(user,PK,MK));
+                                     uint256 TimeEnc2=now-TimeEnc1;
+                                    emit Encrypted_Detail(Encrypted_TK, TimeEnc2);
+                                     return 'Traveling data access granted!';
+                                        
+                                    }
+                            
+                               
+                                    
+                                  else{ if(keccak256(abi.encodePacked(RType))==keccak256(abi.encodePacked('HealthCare'))){
+                                       Encrypted_TK= keccak256(abi.encodePacked(user,PK,MK));
+                                       uint256 TimeEnc2=now-TimeEnc1;
+                                        emit Encrypted_Detail(Encrypted_TK, TimeEnc2);
+                                        return 'HealthCare data access granted';
+                        
+                                  }
+                        else{
+                                return 'Access denied due invalid RID or RType or AcessTime entry or Acess Time expair!';
+                                            }
+                            }
+                           
+                         }
+                          
+               }
+                
+          }
+          }
+          }// break;
+            
+    
+        if(!UserExists){
+            //trigger UserDoesnotExist event
+           emit UserDoesnotExist(user,community,msg.sender);
+            // trigger failed authentication event
+              emit  NotAuthenticated(msg.sender);
+        }
+        
+       //emit Time( now - start); 
+        //string  str = "Hello World";
+    }
+    
+     // authentication events
+      event Encrypted_Detail(bytes32 Encrypted_TK, uint256 Encryption_Time);
+    event Authenticated(address user, address Patient,  uint256 AcessTime,uint256 meanTime, address community); 
+    event NotAuthenticated(address user);
+    event TokenCreated(bytes32 uid, address user, address Patient, address community, uint256 time, uint256 SRdelay);
+    event UserDoesnotExist(address user,address community, address CheckingGateway);
+    event Time( uint256 meanTime);
+    
+    uint256 TimeDec1=now;
+    function Decrypt_Detail(bytes32 _Encrypted_TK, address user)public onlyGateway{ 
+        if (_Encrypted_TK==keccak256(abi.encodePacked(user,PK,MK))){
+            uint256 TimeDec2=now-TimeDec1;
+            emit Decrypted_Detail(user,PK,MK,TimeDec2);
+        }
+    }
+   event Decrypted_Detail(address _user, bytes32 PK, bytes32 MK, uint256 Decrytion_Time);
+}
